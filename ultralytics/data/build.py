@@ -1,4 +1,4 @@
-# Ultralytics YOLO 🚀, AGPL-3.0 license
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
 import os
 import random
@@ -21,7 +21,7 @@ from ultralytics.data.loaders import (
     autocast_list,
 )
 from ultralytics.data.utils import IMG_FORMATS, PIN_MEMORY, VID_FORMATS
-from ultralytics.utils import LINUX, RANK, colorstr
+from ultralytics.utils import RANK, colorstr
 from ultralytics.utils.checks import check_file
 
 
@@ -46,6 +46,18 @@ class InfiniteDataLoader(dataloader.DataLoader):
         """Creates a sampler that repeats indefinitely."""
         for _ in range(len(self)):
             yield next(self.iterator)
+
+    def __del__(self):
+        """Ensure that workers are terminated."""
+        try:
+            if not hasattr(self.iterator, "_workers"):
+                return
+            for w in self.iterator._workers:  # force terminate
+                if w.is_alive():
+                    w.terminate()
+            self.iterator._shutdown_workers()  # cleanup
+        except Exception:
+            pass
 
     def reset(self):
         """
@@ -128,7 +140,7 @@ def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1):
     """Return an InfiniteDataLoader or DataLoader for training or validation set."""
     batch = min(batch, len(dataset))
     nd = torch.cuda.device_count()  # number of CUDA devices
-    nw = min([os.cpu_count() // max(nd, 1), workers])  # number of workers
+    nw = min(os.cpu_count() // max(nd, 1), workers)  # number of workers
     sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
     generator = torch.Generator()
     generator.manual_seed(6148914691236517205 + RANK)
